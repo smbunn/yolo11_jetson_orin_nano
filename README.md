@@ -210,3 +210,4 @@ TensorRT engines require a warm-up pass on first use. The app runs one warm-up f
 
 - [Ultralytics YOLO11](https://github.com/ultralytics/ultralytics)
 - [NVIDIA Jetson](https://developer.nvidia.com/embedded/jetson-orin-nano-devkit)
+- [Claude AI](https://claude.ai/chat/)
