@@ -668,14 +668,38 @@ class ModelSelectDialog(QDialog):
         layout.setSpacing(10)
 
         # ── Header ──────────────────────────────
-        task = self.available[0].task if self.available else ""
         header = QLabel(
-            "Choose a model size. Options reflect available .pt and "
+            "Choose a task and model size. Options reflect available .pt and "
             "TensorRT engines in the weights folder."
         )
         header.setWordWrap(True)
         header.setStyleSheet("color:#777; font-size:11px;")
         layout.addWidget(header)
+
+        # ── Task selector (shown when all tasks available) ───
+        tasks_present = sorted(set(m.task for m in self.available))
+        self._task_filter = tasks_present[0] if tasks_present else "Detection"
+
+        if len(tasks_present) > 1:
+            task_row = QHBoxLayout()
+            task_row.addWidget(QLabel("Task:"))
+            self._task_btn_group = QButtonGroup(self)
+            task_colors = {"Detection": "#E8622A", "Segmentation": "#2A8CE8", "Pose": "#2AE862"}
+            for task in ["Detection", "Segmentation", "Pose"]:
+                rb = QRadioButton(task)
+                color = task_colors.get(task, "#aaa")
+                enabled = task in tasks_present
+                rb.setEnabled(enabled)
+                rb.setChecked(task == self._task_filter)
+                rb.setStyleSheet(
+                    f"QRadioButton {{ color: {color if enabled else '#444'}; }}"
+                    f"QRadioButton::indicator:checked {{ background:{color}; border-color:{color}; }}"
+                )
+                rb.toggled.connect(lambda checked, t=task: self._on_task_changed(t) if checked else None)
+                self._task_btn_group.addButton(rb)
+                task_row.addWidget(rb)
+            task_row.addStretch()
+            layout.addLayout(task_row)
 
         # ── Model list ──────────────────────────
         self.list_widget = QListWidget()
@@ -684,57 +708,8 @@ class ModelSelectDialog(QDialog):
         else:
             self.list_widget.setSelectionMode(QListWidget.MultiSelection)
 
-        # Group available models by size so we can show one row per size
-        # with all available backends annotated.
-        sizes_seen = []
-        by_size: dict[str, list[ModelInfo]] = {}
-        for mi in self.available:
-            if mi.size not in by_size:
-                by_size[mi.size] = []
-                sizes_seen.append(mi.size)
-            by_size[mi.size].append(mi)
-
-        self._size_rows: dict[str, list[ModelInfo]] = by_size
-
-        for size in ["n", "s", "m", "l", "x"]:
-            models_for_size = by_size.get(size, [])
-            name = f"yolo11{size}"
-            if self.available:
-                suffix = "-seg" if self.available[0].task == "Segmentation" \
-                         else "-pose" if self.available[0].task == "Pose" else ""
-                name = f"yolo11{size}{suffix}"
-
-            if models_for_size:
-                # PT availability
-                pt_found = any(m.backend == "PT" for m in models_for_size)
-                # Which TRT precisions are actually on disk
-                trt_precs = [m.precision for m in models_for_size
-                             if m.backend == "TRT" and m.precision]
-                tags = []
-                if pt_found:
-                    tags.append("PT✓")
-                if trt_precs:
-                    tags.append("TRT: " + ", ".join(trt_precs))
-                tag_str = ",  ".join(tags)
-                label = f"{name}    [{tag_str}]"
-                item = QListWidgetItem(label)
-                item.setData(Qt.UserRole, models_for_size)
-                item.setForeground(QColor("#E8622A"))
-            else:
-                label = f"{name}    [no files found]"
-                item = QListWidgetItem(label)
-                item.setForeground(QColor("#444"))
-                item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
-
-            self.list_widget.addItem(item)
-
-        # Pre-select first available row
-        for i in range(self.list_widget.count()):
-            if self.list_widget.item(i).flags() & Qt.ItemIsEnabled:
-                self.list_widget.setCurrentRow(i)
-                break
-
         layout.addWidget(self.list_widget, 1)
+        self._populate_list()
 
         # ── Options ─────────────────────────────
         options_gb = QGroupBox("Options")
@@ -792,6 +767,53 @@ class ModelSelectDialog(QDialog):
         btn_row.addWidget(ok_btn)
         btn_row.addWidget(cancel_btn)
         layout.addLayout(btn_row)
+
+    def _on_task_changed(self, task: str):
+        self._task_filter = task
+        self._populate_list()
+
+    def _populate_list(self):
+        self.list_widget.clear()
+        task_models = [m for m in self.available if m.task == self._task_filter]
+        task_colors = {"Detection": "#E8622A", "Segmentation": "#2A8CE8", "Pose": "#2AE862"}
+        color = task_colors.get(self._task_filter, "#E8622A")
+
+        by_size: dict[str, list] = {}
+        for mi in task_models:
+            by_size.setdefault(mi.size, []).append(mi)
+
+        suffix = "-seg" if self._task_filter == "Segmentation"                  else "-pose" if self._task_filter == "Pose" else ""
+
+        for size in ["n", "s", "m", "l", "x"]:
+            name = f"yolo11{size}{suffix}"
+            models_for_size = by_size.get(size, [])
+
+            if models_for_size:
+                pt_found  = any(m.backend == "PT"  for m in models_for_size)
+                trt_precs = [m.precision for m in models_for_size
+                             if m.backend == "TRT" and m.precision]
+                tags = []
+                if pt_found:
+                    tags.append("PT✓")
+                if trt_precs:
+                    tags.append("TRT: " + ", ".join(trt_precs))
+                label = f"{name}    [{',  '.join(tags)}]"
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, models_for_size)
+                item.setForeground(QColor(color))
+            else:
+                label = f"{name}    [no files found]"
+                item = QListWidgetItem(label)
+                item.setForeground(QColor("#444"))
+                item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
+
+            self.list_widget.addItem(item)
+
+        # Pre-select first available row
+        for i in range(self.list_widget.count()):
+            if self.list_widget.item(i).flags() & Qt.ItemIsEnabled:
+                self.list_widget.setCurrentRow(i)
+                break
 
     def _accept(self):
         # Read precision
