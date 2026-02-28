@@ -1,0 +1,12 @@
+# Model weights (too large for GitHub)
+weights/*.pt
+weights/*.engine
+weights/*.onnx
+weights/*.cache
+
+# Python
+__pycache__/
+*.pyc
+
+# Ultralytics
+runs/
