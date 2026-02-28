@@ -1205,9 +1205,9 @@ class CompareTab(QWidget):
         self.hint.show()
 
 
-# ─────────────────────────────────────────────
-#  Single Inference Tab (matches your screenshot)
-# ─────────────────────────────────────────────
+# ──────────────────────────────────
+#  Single Inference Tab 
+# ──────────────────────────────────
 
 class SingleInferenceTab(QWidget):
     def __init__(self, available: list[ModelInfo]):
