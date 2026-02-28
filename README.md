@@ -28,7 +28,7 @@ A PyQt5 desktop application for benchmarking and comparing YOLO11 detection, seg
 ![Single Inference](assets/screenshot-single.png)
 
 ### Live Compare
-![Live Compare](assets/screenshot-compare.png)
+![Live Compare](assets/screenshot-compare.png?v=2)
 
 ### Benchmark
 ![Benchmark](assets/screenshot-benchmark.png)
