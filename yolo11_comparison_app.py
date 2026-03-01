@@ -187,14 +187,20 @@ def discover_models() -> list[ModelInfo]:
 # ─────────────────────────────────────────────
 
 class CameraThread(QThread):
-    """Opens the camera once and delivers copies to all registered listeners."""
+    """Opens the camera once and delivers copies to all registered listeners.
+    Automatically stops and releases the device when the last listener leaves."""
 
     def __init__(self, source):
         super().__init__()
         self.source      = source
         self._running    = False
         self._lock       = threading.Lock()
-        self._listeners  = []   # list of callables: fn(frame: np.ndarray)
+        self._listeners  = []
+
+    @property
+    def listener_count(self):
+        with self._lock:
+            return len(self._listeners)
 
     def add_listener(self, fn):
         with self._lock:
@@ -203,6 +209,10 @@ class CameraThread(QThread):
     def remove_listener(self, fn):
         with self._lock:
             self._listeners = [l for l in self._listeners if l is not fn]
+            remaining = len(self._listeners)
+        # Stop the camera thread when nobody is listening any more
+        if remaining == 0:
+            self._running = False
 
     def run(self):
         cap = cv2.VideoCapture(self.source)
@@ -226,6 +236,11 @@ class CameraThread(QThread):
                     pass
 
         cap.release()
+        # Remove from registry so next use creates a fresh thread
+        key = str(self.source)
+        with _camera_registry_lock:
+            if _camera_registry.get(key) is self:
+                _camera_registry.pop(key, None)
 
     def stop(self):
         self._running = False
@@ -252,6 +267,15 @@ def release_shared_camera(source):
         cam = _camera_registry.pop(key, None)
     if cam:
         cam.stop()
+
+def release_all_cameras():
+    """Stop every active CameraThread and clear the registry.
+    Call this before any code that needs exclusive camera access (e.g. Benchmark)."""
+    with _camera_registry_lock:
+        cams = list(_camera_registry.values())
+        _camera_registry.clear()
+    for cam in cams:
+        cam.stop()   # blocks until the thread exits and cap.release() is called
 
 
 # Map our task names to ultralytics task strings.
@@ -367,8 +391,12 @@ class InferenceThread(QThread):
 
         # Cleanup
         if use_shared:
-            cam = get_shared_camera(self.source)
-            cam.remove_listener(self._on_camera_frame)
+            # Remove our listener — CameraThread auto-stops when count hits 0
+            key = str(self.source)
+            with _camera_registry_lock:
+                cam = _camera_registry.get(key)
+            if cam:
+                cam.remove_listener(self._on_camera_frame)
         else:
             cap.release()
 
@@ -399,6 +427,9 @@ class BenchmarkThread(QThread):
     def run(self):
         results = []
         total = len(self.models)
+
+        # Ensure no other tab is holding the camera open before we try to grab it.
+        release_all_cameras()
 
         # Open camera once and reuse across all models.
         # This avoids the /dev/video0 exclusive-access problem and
@@ -1205,9 +1236,9 @@ class CompareTab(QWidget):
         self.hint.show()
 
 
-# ──────────────────────────────────
-#  Single Inference Tab 
-# ──────────────────────────────────
+# ─────────────────────────────────────────────
+#  Single Inference Tab (matches your screenshot)
+# ─────────────────────────────────────────────
 
 class SingleInferenceTab(QWidget):
     def __init__(self, available: list[ModelInfo]):
