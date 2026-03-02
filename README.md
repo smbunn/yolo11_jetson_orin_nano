@@ -87,14 +87,9 @@ The script downloads all files into the `weights/` folder, skipping any that alr
 
 #### If a download fails or produces a tiny file (~165 bytes)
 
-OneDrive share links can expire. To refresh them:
+OneDrive share links can expire. 
 
-1. In Windows File Explorer, right-click each file in OneDrive → **Share** → **Copy link** (set to *Anyone, no expiry*)
-2. Run `Get-WeightLinks-Simple.ps1` on Windows to generate fresh direct URLs
-3. Open `download_weights.sh` and replace the stale URLs with the new ones
-4. Delete the broken files: `rm weights/yolo11n.pt`
-5. Re-run `./download_weights.sh`
-
+Create an issue if they have expired and I will renew them
 ---
 
 ## TensorRT Export
