@@ -60,38 +60,53 @@ pip install ultralytics opencv-python-headless PyQt5 "numpy<2.0" --break-system-
 ## Installation
 
 ```bash
-git clone https://github.com/your-username/yolo11-jetson-comparison.git
-cd yolo11-jetson-comparison
-mkdir weights
+git clone https://github.com/smbunn/yolo11_jetson_orin_nano.git
+cd yolo11_jetson_orin_nano
 ```
 
 ### Download YOLO11 weights
 
-```bash
-cd weights
-
-# Detection
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s.pt
-
-# Segmentation
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-seg.pt
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-seg.pt
-
-# Pose
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n-pose.pt
-wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11s-pose.pt
-```
-
-Or download all sizes at once:
+Model weight files (`.pt` and `.engine`) are stored on OneDrive and are not committed to this repository due to their size. Use the included `download_weights.sh` script to fetch them automatically.
 
 ```bash
-for size in n s m l x; do
-    wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11${size}.pt
-    wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11${size}-seg.pt
-    wget https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11${size}-pose.pt
-done
+chmod +x download_weights.sh
+./download_weights.sh
 ```
+
+The script reads `onedrive_urls.txt` (included in the repo) and downloads all files into the `weights/` folder, skipping any that already exist.
+
+#### Download options
+
+```bash
+# Download all models
+./download_weights.sh
+
+# Download only specific sizes (n=nano, s=small, m=medium, l=large, x=extra-large)
+./download_weights.sh n s
+
+# Use a different URL file
+./download_weights.sh --urls my_links.txt
+```
+
+#### onedrive_urls.txt format
+
+The URL file contains one model per line — filename and direct download URL separated by a space. Lines beginning with `#` are ignored.
+
+```
+# YOLO11 weight links
+yolo11n.pt https://api.onedrive.com/v1.0/shares/u!...
+yolo11n-fp16.engine https://api.onedrive.com/v1.0/shares/u!...
+yolo11n-seg.pt https://api.onedrive.com/v1.0/shares/u!...
+```
+
+#### If a download fails or produces a tiny file (~165 bytes)
+
+OneDrive share links can expire. To refresh them:
+
+1. In Windows File Explorer, right-click each file in OneDrive → **Share** → **Copy link** (set to *Anyone, no expiry*)
+2. Run `Get-WeightLinks-Simple.ps1` on Windows to regenerate `onedrive_urls.txt` with fresh direct URLs
+3. Delete the broken files: `rm weights/yolo11n.pt`
+4. Re-run `./download_weights.sh`
 
 ---
 
@@ -172,13 +187,18 @@ Select tasks to benchmark, set frames per model, and click **Start Benchmark**. 
 ## Project Structure
 
 ```
-yolo11-jetson-comparison/
-├── yolo11_comparison_app.py   # Main application
-├── weights/                   # Place .pt and .engine files here
-│   ├── yolo11n.pt
-│   ├── yolo11n-fp16.engine
-│   └── ...
-└── README.md
+yolo11_jetson_orin_nano/
+├── yolo11_comparison_app.py    # Main application
+├── download_weights.sh          # Downloads model weights from OneDrive
+├── Get-WeightLinks-Simple.ps1   # Windows PowerShell script to regenerate onedrive_urls.txt
+├── onedrive_urls.txt            # OneDrive share links for all weight files
+├── .gitignore                   # Excludes *.pt and *.engine from git
+├── README.md
+└── weights/                     # Model files — downloaded, not stored in git
+    ├── yolo11n.pt
+    ├── yolo11n-fp16.engine
+    ├── yolo11n-seg.pt
+    └── ...
 ```
 
 ---
