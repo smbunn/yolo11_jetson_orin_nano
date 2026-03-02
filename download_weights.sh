@@ -86,15 +86,5 @@ done
 echo ""
 echo "Done. Contents of $WEIGHTS_DIR:"
 ls -lh "$WEIGHTS_DIR"
-```
 
-Save it as `download_weights.sh` inside your project folder.
 
----
-
-## 2. Make sure .gitignore is correct
-
-Open your `.gitignore` and confirm these lines are present and **not** commented out:
-```
-weights/*.pt
-weights/*.engine
