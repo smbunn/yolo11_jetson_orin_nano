@@ -67,6 +67,11 @@ cd yolo11_jetson_orin_nano
 ### Download YOLO11 weights
 
 Download all Pytorch weight files (*.pt).
+```bash
+chmod +x download_weights.sh
+./download_weights.sh
+```
+Then create the TRT files from the downloaded PT files
 
 ```bash
 chmod +x export_all_engines.sh
