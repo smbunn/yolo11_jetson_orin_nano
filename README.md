@@ -69,8 +69,8 @@ cd yolo11_jetson_orin_nano
 Download all Pytorch weight files (*.pt).
 
 ```bash
-chmod +x export_all_weights.sh
-./export_all_weights.sh
+chmod +x export_all_engines.sh
+./export_all_engines.sh
 ```
 
 The script creates all files into the `weights/` folder, skipping any that already exist.
