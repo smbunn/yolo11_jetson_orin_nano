@@ -66,29 +66,14 @@ cd yolo11_jetson_orin_nano
 
 ### Download YOLO11 weights
 
-Model weight files (`.pt` and `.engine`) are stored on OneDrive and are not committed to this repository due to their size. Use the included `download_weights.sh` script to fetch them automatically. The OneDrive direct download URLs are embedded inside the script.
+Download all Pytorch weight files (*.pt).
 
 ```bash
-chmod +x download_weights.sh
-./download_weights.sh
+chmod +x export_all_weights.sh
+./export_all_weights.sh
 ```
 
-The script downloads all files into the `weights/` folder, skipping any that already exist.
-
-#### Download options
-
-```bash
-# Download all models
-./download_weights.sh
-
-# Download only specific sizes (n=nano, s=small, m=medium, l=large, x=extra-large)
-./download_weights.sh n s
-```
-
-#### If a download fails or produces a tiny file (~165 bytes)
-
-OneDrive share links can expire. 
-Create an issue if they have expired and I will renew them
+The script creates all files into the `weights/` folder, skipping any that already exist.
 
 ---
 
