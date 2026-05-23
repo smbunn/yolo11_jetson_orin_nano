@@ -1,6 +1,6 @@
-# YOLO11 Model Comparison App — Jetson Orin Nano
+# YOLO Model Comparison App — Jetson Orin Nano
 
-A PyQt5 desktop application for benchmarking and comparing YOLO11 detection, segmentation, and pose estimation models on the NVIDIA Jetson Orin Nano. Supports both PyTorch (`.pt`) and TensorRT (`.engine`) inference across all model sizes (n/s/m/l/x) and precisions (FP32/FP16/INT8).
+A PyQt5 desktop application for benchmarking and comparing YOLO detection, segmentation, and pose estimation models on the NVIDIA Jetson Orin Nano. Supports **YOLO11** and **YOLO26** model families, with both PyTorch (`.pt`) and TensorRT (`.engine`) inference across all model sizes (n/s/m/l/x) and precisions (FP32/FP16/INT8).
 
 ![Platform](https://img.shields.io/badge/platform-Jetson%20Orin%20Nano-green)
 ![Python](https://img.shields.io/badge/python-3.10-blue)
@@ -11,6 +11,7 @@ A PyQt5 desktop application for benchmarking and comparing YOLO11 detection, seg
 
 ## Features
 
+- **Two model families** — YOLO11 and YOLO26, selectable per model slot
 - **Three tabs** — Single Inference, Live Compare, and Benchmark
 - **Live side-by-side comparison** of up to 4 models simultaneously from a single camera feed
 - **Benchmark mode** with configurable frame count, confidence, and per-task filtering
@@ -32,6 +33,20 @@ A PyQt5 desktop application for benchmarking and comparing YOLO11 detection, seg
 
 ### Benchmark
 ![Benchmark](assets/screenshot-benchmark.png)
+
+---
+
+## Model Families
+
+The app supports two YOLO model families. Both use the same task types (Detection, Segmentation, Pose) and the same file naming convention — just with different prefixes.
+
+| Family | Prefix | Example weights |
+|--------|--------|-----------------|
+| YOLO11 | `yolo11` | `yolo11n.pt`, `yolo11s-seg-fp16.engine` |
+| YOLO26 | `yolo26` | `yolo26n.pt`, `yolo26s-pose-fp32.engine` |
+
+The app auto-discovers all files in `weights/` at startup and groups them by family, task, and size. You can compare models across families — e.g. YOLO11n vs YOLO26n — in the Live Compare or Benchmark tabs.
+
 ---
 
 ## Requirements
@@ -66,19 +81,29 @@ cd yolo11_jetson_orin_nano
 
 ### Download YOLO11 weights
 
-Download all Pytorch weight files (*.pt).
+Downloads YOLO11 PyTorch weight files from the Ultralytics GitHub releases.
+
 ```bash
 chmod +x download_weights.sh
 ./download_weights.sh
 ```
-Then create the TRT files from the downloaded PT files
+
+> **Note:** YOLO26 weights must be downloaded manually from the Ultralytics releases page and placed in the `weights/` folder using the naming convention below.
+
+### Export TensorRT engines
+
+Once `.pt` files are in `weights/`, run the export script to build all TensorRT `.engine` files:
 
 ```bash
-chmod +x export_all_engines.sh
-./export_all_engines.sh
+python3 export_all_engines.py
 ```
 
-The script creates all files into the `weights/` folder, skipping any that already exist.
+This script:
+- Sets the Jetson to max performance mode (`nvpmodel -m 0`, `jetson_clocks`)
+- Exports FP32, FP16, and INT8 engines for each model
+- Skips any engine that already exists
+- Skips INT8 for segmentation models (not supported on TRT 10.3)
+- Renames output files to the correct naming convention automatically
 
 ---
 
@@ -86,7 +111,13 @@ The script creates all files into the `weights/` folder, skipping any that alrea
 
 Export `.pt` files to TensorRT `.engine` files for best performance on Jetson. Each export takes a few minutes and only needs to be done once. Engines are device-specific — an engine built on one Jetson cannot be used on a different device.
 
-### FP16 (recommended — best speed/accuracy balance)
+### Using the export script (recommended)
+
+```bash
+python3 export_all_engines.py
+```
+
+### Manual export — FP16 (recommended — best speed/accuracy balance)
 
 ```bash
 python3 -c "
@@ -95,7 +126,7 @@ YOLO('weights/yolo11n.pt').export(format='engine', half=True, device=0)
 " && mv weights/yolo11n.engine weights/yolo11n-fp16.engine
 ```
 
-### FP32 (most accurate, slowest)
+### Manual export — FP32 (most accurate, slowest)
 
 ```bash
 python3 -c "
@@ -104,7 +135,7 @@ YOLO('weights/yolo11n.pt').export(format='engine', half=False, device=0)
 " && mv weights/yolo11n.engine weights/yolo11n-fp32.engine
 ```
 
-### INT8 (fastest, requires calibration)
+### Manual export — INT8 (fastest, requires calibration)
 
 ```bash
 python3 -c "
@@ -127,7 +158,9 @@ YOLO('weights/yolo11n.pt').export(format='engine', int8=True, device=0)
 
 ## Weight File Naming Convention
 
-The app auto-discovers files in the `weights/` directory using the following naming convention:
+The app auto-discovers files in `weights/` using this naming convention. The same pattern applies to both YOLO11 and YOLO26.
+
+### YOLO11
 
 | Task | PyTorch | TRT FP16 | TRT FP32 | TRT INT8 |
 |------|---------|----------|----------|----------|
@@ -135,7 +168,15 @@ The app auto-discovers files in the `weights/` directory using the following nam
 | Segmentation | `yolo11n-seg.pt` | `yolo11n-seg-fp16.engine` | `yolo11n-seg-fp32.engine` | `yolo11n-seg-int8.engine` |
 | Pose | `yolo11n-pose.pt` | `yolo11n-pose-fp16.engine` | `yolo11n-pose-fp32.engine` | `yolo11n-pose-int8.engine` |
 
-Legacy untagged `.engine` files (e.g. `yolo11n.engine`) are also recognised and treated as FP16.
+### YOLO26
+
+| Task | PyTorch | TRT FP16 | TRT FP32 | TRT INT8 |
+|------|---------|----------|----------|----------|
+| Detection | `yolo26n.pt` | `yolo26n-fp16.engine` | `yolo26n-fp32.engine` | `yolo26n-int8.engine` |
+| Segmentation | `yolo26n-seg.pt` | `yolo26n-seg-fp16.engine` | `yolo26n-seg-fp32.engine` | `yolo26n-seg-int8.engine` |
+| Pose | `yolo26n-pose.pt` | `yolo26n-pose-fp16.engine` | `yolo26n-pose-fp32.engine` | `yolo26n-pose-int8.engine` |
+
+Replace `n` with `s`, `m`, `l`, or `x` for larger model sizes. Legacy untagged `.engine` files (e.g. `yolo11n.engine`) are also recognised and treated as FP16.
 
 ---
 
@@ -146,10 +187,10 @@ python3 yolo11_comparison_app.py
 ```
 
 ### Single Inference tab
-Select a task (Detection / Segmentation / Pose), click **Configure Model** to choose a model size and precision, set your input source, and click **Start**.
+Select a task (Detection / Segmentation / Pose), click **Configure Model** to choose a model family, size, and precision, set your input source, and click **Start**.
 
 ### Live Compare tab
-Click **Select Models…** to choose up to 4 models. All models share a single camera capture thread so only one process holds `/dev/video0` at a time.
+Click **Select Models…** to choose up to 4 models. Models from different families (e.g. YOLO11n vs YOLO26n) can be compared side by side. All models share a single camera capture thread so only one process holds `/dev/video0` at a time.
 
 ### Benchmark tab
 Select tasks to benchmark, set frames per model, and click **Start Benchmark**. The app captures a pool of frames from the camera, releases it, then runs each model against the same frames for a fair comparison. Results are displayed in a sortable table with FPS, latency, and detection counts.
@@ -161,14 +202,16 @@ Select tasks to benchmark, set frames per model, and click **Start Benchmark**. 
 ```
 yolo11_jetson_orin_nano/
 ├── yolo11_comparison_app.py    # Main application
-├── download_weights.sh          # Downloads model weights from OneDrive (URLs embedded inside)
+├── download_weights.sh          # Downloads YOLO11 weights from Ultralytics releases
+├── export_all_engines.py        # Exports all .pt files to TensorRT .engine files
 ├── Get-WeightLinks-Simple.ps1   # Windows PowerShell script to regenerate OneDrive URLs
-├── .gitignore                   # Excludes *.pt and *.engine from git
+├── .gitignore                   # Excludes *.pt, *.engine, *.onnx, *.cache from git
 ├── README.md
-└── weights/                     # Model files — downloaded, not stored in git
+└── weights/                     # Model files — downloaded/exported locally, not in git
     ├── yolo11n.pt
     ├── yolo11n-fp16.engine
-    ├── yolo11n-seg.pt
+    ├── yolo26n.pt
+    ├── yolo26n-fp16.engine
     └── ...
 ```
 
@@ -176,29 +219,34 @@ yolo11_jetson_orin_nano/
 
 ## Troubleshooting
 
-**`numpy is not available`**
-Downgrade numpy: `pip install "numpy<2.0" --break-system-packages`
+### App won't start — Qt plugin error
+Run from an X11 session (not SSH without display forwarding). If using RDP, ensure `DISPLAY=:10` is set:
 
-**`Could not load Qt platform plugin "xcb"`**
-Install headless OpenCV: `pip uninstall opencv-python && pip install opencv-python-headless --break-system-packages`
+```bash
+DISPLAY=:10 python3 yolo11_comparison_app.py
+```
 
-**`Cannot open source: /dev/video0`**
-Check your camera is connected and accessible: `ls -la /dev/video*`
-You may need to add your user to the `video` group: `sudo usermod -aG video $USER`
+### numpy import error
+```bash
+pip install "numpy<2.0" --break-system-packages
+```
 
-**`WARNING: Unable to automatically guess model task`**
-This was a known issue with TensorRT `.engine` files — the app now passes the task explicitly when loading all models.
+### TensorRT engine fails to load
+Engines are device-specific. If you copied an engine from another machine, re-export it on this Jetson.
 
-**INT8 segmentation export fails**
-See the note in the TensorRT Export section above. Use FP16 for segmentation on JetPack 5.x.
+### No camera found
+Check `/dev/video0` exists:
 
-**App is slow on first inference**
-TensorRT engines require a warm-up pass on first use. The app runs one warm-up frame before timing begins in benchmark mode.
+```bash
+ls -la /dev/video*
+```
+
+### Issues / expired download links
+
+If a download link is broken or expired, please open an issue on GitHub and mention which model file failed.
 
 ---
 
-## Acknowledgements
+## License
 
-- [Ultralytics YOLO11](https://github.com/ultralytics/ultralytics)
-- [NVIDIA Jetson](https://developer.nvidia.com/embedded/jetson-orin-nano-devkit)
-- [Claude AI](https://claude.ai/chat/)
+MIT
