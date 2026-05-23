@@ -1,8 +1,9 @@
 # Model weights (too large for GitHub)
-#weights/*.pt
-#weights/*.engine
-#weights/*.onnx
-#weights/*.cache
+weights/*.pt
+weights/*.engine
+weights/*.onnx
+weights/*.cache
+*.pt
 
 # Python
 __pycache__/

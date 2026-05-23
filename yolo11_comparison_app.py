@@ -57,24 +57,25 @@ from PyQt5.QtGui import QImage, QPixmap, QFont, QColor, QPalette, QIcon
 #  Configuration
 # ─────────────────────────────────────────────
 
+MODEL_FAMILIES = ["yolo11", "yolo26"]
 WEIGHTS_DIR = Path("./weights")       # Where .pt / .engine files live
 MODEL_SIZES = ["n", "s", "m", "l", "x"]
 TRT_PRECISIONS = ["fp16", "fp32", "int8"]  # checked in preference order
 
 TASK_CONFIGS = {
     "Detection": {
-        "pt_pattern":  "yolo11{size}.pt",
-        "trt_pattern": "yolo11{size}{prec_suffix}.engine",
+        "pt_pattern":  "{family}{size}.pt",
+        "trt_pattern": "{family}{size}{prec_suffix}.engine",
         "color":       "#E8622A",
     },
     "Segmentation": {
-        "pt_pattern":  "yolo11{size}-seg.pt",
-        "trt_pattern": "yolo11{size}-seg{prec_suffix}.engine",
+        "pt_pattern":  "{family}{size}-seg.pt",
+        "trt_pattern": "{family}{size}-seg{prec_suffix}.engine",
         "color":       "#2A8CE8",
     },
     "Pose": {
-        "pt_pattern":  "yolo11{size}-pose.pt",
-        "trt_pattern": "yolo11{size}-pose{prec_suffix}.engine",
+        "pt_pattern":  "{family}{size}-pose.pt",
+        "trt_pattern": "{family}{size}-pose{prec_suffix}.engine",
         "color":       "#2AE862",
     },
 }
@@ -94,13 +95,14 @@ class ModelInfo:
     path:      Path
     precision: str = ""   # "fp16" / "fp32" / "int8" for TRT, "" for PT
     loaded:    bool = False
+    family:   str = "yolo11"
     model:     object = None
 
     @property
     def name(self) -> str:
         suffix = "-seg" if self.task == "Segmentation" \
                  else ("-pose" if self.task == "Pose" else "")
-        return f"yolo11{self.size}{suffix}"
+        return f"{self.family}{self.size}{suffix}"
 
     @property
     def label(self) -> str:
@@ -127,55 +129,53 @@ class BenchResult:
 def discover_models() -> list[ModelInfo]:
     """
     Scan WEIGHTS_DIR (and cwd) for available model files.
-
-    Recognised TRT engine naming conventions:
-      yolo11n-fp16.engine   (precision-tagged -- preferred)
-      yolo11n.engine        (legacy untagged -- treated as fp16)
+    Supports yolo11 and yolo26 families.
     """
     search_dirs = [WEIGHTS_DIR, Path(".")]
     found = []
 
-    for task, cfg in TASK_CONFIGS.items():
-        for size in MODEL_SIZES:
+    for family in MODEL_FAMILIES:
+        for task, cfg in TASK_CONFIGS.items():
+            for size in MODEL_SIZES:
 
-            # ── PT weights ──────────────────────
-            pt_name = cfg["pt_pattern"].format(size=size)
-            for d in search_dirs:
-                fp = d / pt_name
-                if fp.exists():
-                    found.append(ModelInfo(task=task, size=size,
-                                           backend="PT", path=fp,
-                                           precision=""))
-                    break
-
-            # ── TRT engines (precision-tagged) ──
-            for prec in TRT_PRECISIONS:
-                trt_name = cfg["trt_pattern"].format(size=size,
-                                                     prec_suffix=f"-{prec}")
+                # ── PT weights ──────────────────────
+                pt_name = cfg["pt_pattern"].format(family=family, size=size)
                 for d in search_dirs:
-                    fp = d / trt_name
+                    fp = d / pt_name
                     if fp.exists():
                         found.append(ModelInfo(task=task, size=size,
-                                               backend="TRT", path=fp,
-                                               precision=prec))
+                                               backend="PT", path=fp,
+                                               precision="", family=family))
                         break
 
-            # ── TRT engine (legacy untagged) ────
-            legacy_name = cfg["trt_pattern"].format(size=size, prec_suffix="")
-            for d in search_dirs:
-                fp = d / legacy_name
-                if fp.exists():
-                    # Only add if no fp16 engine already found (legacy ≈ fp16)
-                    already = any(
-                        m.task == task and m.size == size
-                        and m.backend == "TRT" and m.precision == "fp16"
-                        for m in found
-                    )
-                    if not already:
-                        found.append(ModelInfo(task=task, size=size,
-                                               backend="TRT", path=fp,
-                                               precision="fp16"))
-                    break
+                # ── TRT engines (precision-tagged) ──
+                for prec in TRT_PRECISIONS:
+                    trt_name = cfg["trt_pattern"].format(family=family, size=size,
+                                                         prec_suffix=f"-{prec}")
+                    for d in search_dirs:
+                        fp = d / trt_name
+                        if fp.exists():
+                            found.append(ModelInfo(task=task, size=size,
+                                                   backend="TRT", path=fp,
+                                                   precision=prec, family=family))
+                            break
+
+                # ── TRT engine (legacy untagged) ────
+                legacy_name = cfg["trt_pattern"].format(family=family, size=size, prec_suffix="")
+                for d in search_dirs:
+                    fp = d / legacy_name
+                    if fp.exists():
+                        already = any(
+                            m.task == task and m.size == size
+                            and m.backend == "TRT" and m.precision == "fp16"
+                            and m.family == family
+                            for m in found
+                        )
+                        if not already:
+                            found.append(ModelInfo(task=task, size=size,
+                                                   backend="TRT", path=fp,
+                                                   precision="fp16", family=family))
+                        break
 
     return found
 
@@ -815,30 +815,32 @@ class ModelSelectDialog(QDialog):
 
         suffix = "-seg" if self._task_filter == "Segmentation"                  else "-pose" if self._task_filter == "Pose" else ""
 
-        for size in ["n", "s", "m", "l", "x"]:
-            name = f"yolo11{size}{suffix}"
-            models_for_size = by_size.get(size, [])
+        for family in ["yolo11", "yolo26"]:
+            for size in ["n", "s", "m", "l", "x"]:
+                models_for_family = [m for m in by_size.get(size, []) if m.family == family]
 
-            if models_for_size:
-                pt_found  = any(m.backend == "PT"  for m in models_for_size)
-                trt_precs = [m.precision for m in models_for_size
-                             if m.backend == "TRT" and m.precision]
-                tags = []
-                if pt_found:
-                    tags.append("PT✓")
-                if trt_precs:
-                    tags.append("TRT: " + ", ".join(trt_precs))
-                label = f"{name}    [{',  '.join(tags)}]"
-                item = QListWidgetItem(label)
-                item.setData(Qt.UserRole, models_for_size)
-                item.setForeground(QColor(color))
-            else:
-                label = f"{name}    [no files found]"
-                item = QListWidgetItem(label)
-                item.setForeground(QColor("#444"))
-                item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
+                if models_for_family:
+                    pt_found  = any(m.backend == "PT"  for m in models_for_family)
+                    trt_precs = [m.precision for m in models_for_family
+                                 if m.backend == "TRT" and m.precision]
+                    tags = []
+                    if pt_found:
+                        tags.append("PT✓")
+                    if trt_precs:
+                        tags.append("TRT: " + ", ".join(trt_precs))
+                    name = f"{family}{size}{suffix}"
+                    label = f"{name}    [{',  '.join(tags)}]"
+                    item = QListWidgetItem(label)
+                    item.setData(Qt.UserRole, models_for_family)
+                    item.setForeground(QColor(color))
+                else:
+                    name = f"{family}{size}{suffix}"
+                    label = f"{name}    [no files found]"
+                    item = QListWidgetItem(label)
+                    item.setForeground(QColor("#444"))
+                    item.setFlags(item.flags() & ~Qt.ItemIsSelectable & ~Qt.ItemIsEnabled)
 
-            self.list_widget.addItem(item)
+                self.list_widget.addItem(item)
 
         # Pre-select first available row
         for i in range(self.list_widget.count()):
