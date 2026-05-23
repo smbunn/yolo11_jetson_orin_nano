@@ -29,7 +29,7 @@ A PyQt5 desktop application for benchmarking and comparing YOLO detection, segme
 ![Single Inference](assets/screenshot-single.png)
 
 ### Live Compare
-![Live Compare](assets/screenshot-compare.png?v=2)
+![Live Compare](assets/screenshot-compare.png?v=3)
 
 ### Benchmark
 ![Benchmark](assets/screenshot-benchmark.png)
